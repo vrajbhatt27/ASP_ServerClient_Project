@@ -69,7 +69,7 @@ static int traverse(const char *fpath, const struct stat *sb, int tflag, struct 
 
 void handleClientRequest(char *cmd)
 {
-    if (strcmp(cmd, "dirlist -a") == 0)
+    if (strstr(cmd, "dirlist") != NULL)
     {
         cmdCase = 0;
         indexCntForTextResponse = 0;
@@ -86,15 +86,19 @@ void handleClientRequest(char *cmd)
             exit(1);
         }
 
-        for (int i = 0; i < indexCntForTextResponse - 1; i++)
+        // Sorting the array in alphabetical order
+        if (strstr(cmd, "-a") != NULL)
         {
-            for (int j = 0; j < indexCntForTextResponse - i - 1; j++)
+            for (int i = 0; i < indexCntForTextResponse - 1; i++)
             {
-                if (strcmp(textResponseArray[j], textResponseArray[j + 1]) > 0)
+                for (int j = 0; j < indexCntForTextResponse - i - 1; j++)
                 {
-                    char *temp = textResponseArray[j];
-                    textResponseArray[j] = textResponseArray[j + 1];
-                    textResponseArray[j + 1] = temp;
+                    if (strcmp(textResponseArray[j], textResponseArray[j + 1]) > 0)
+                    {
+                        char *temp = textResponseArray[j];
+                        textResponseArray[j] = textResponseArray[j + 1];
+                        textResponseArray[j + 1] = temp;
+                    }
                 }
             }
         }
@@ -109,6 +113,7 @@ void handleClientRequest(char *cmd)
         }
 
         responseType = IS_TEXT_RESPONSE;
+        free(textResponseArray);
     }
 }
 
