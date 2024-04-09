@@ -8,7 +8,7 @@
 #include <sys/signal.h>
 #include <arpa/inet.h>
 
-#define PORTNUM 8080
+#define PORTNUM 7654
 #define BUFF_LMT 1024
 #define IS_TEXT_RESPONSE 1
 
@@ -83,7 +83,7 @@ void processClientResponse(int csd)
             {
                 return;
             }
-            printf("%s\n", serverResponse);
+            printf("%s", serverResponse);
         }
     }
 }

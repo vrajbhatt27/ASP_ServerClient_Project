@@ -11,17 +11,20 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <ftw.h>
+#include <time.h>
 
-#define PORTNUM 8080
+#define PORTNUM 7654
 #define BUFF_LMT 1024
 #define sourcePath "/home/bhatt6b/Desktop"
 #define IS_TEXT_RESPONSE 1
 
 int cmdCase;
+char filename[256];
 char textResponse[1024];
-char **textResponseArray;
+char *textResponseArray[1024];
 int indexCntForTextResponse = 0;
 int responseType;
+int fileFound;
 
 int receiveData(int csd, char *buffer, int bufferSize)
 {
@@ -48,20 +51,47 @@ int sendData(int csd, char *data)
         perror("Error sending data to client");
         return -1;
     }
-
+    memset(data, 0, strlen(data));
     return 0;
 }
 
 // This function is used by the nftw() to traverse all the file in the path.
 static int traverse(const char *fpath, const struct stat *sb, int tflag, struct FTW *ftwbuf)
 {
-    if (cmdCase == 0)
+    switch (cmdCase)
     {
+    case 0:
         if (tflag == FTW_D)
         {
             textResponseArray[indexCntForTextResponse] = strdup(fpath + ftwbuf->base);
             indexCntForTextResponse++;
         }
+        break;
+    case 1:
+        if (tflag == FTW_F)
+        {
+            if (strcmp(fpath + ftwbuf->base, filename) == 0)
+            {
+                fileFound = 1;
+                textResponseArray[0] = "File Name: ";
+                textResponseArray[1] = strdup(fpath + ftwbuf->base);
+
+                char temp[50];
+                sprintf(temp, "%ld", sb->st_size);
+                textResponseArray[2] = "File Size: ";
+                textResponseArray[3] = strdup(temp);
+
+                memset(temp, 0, sizeof(temp));
+                sprintf(temp, "%o", sb->st_mode);
+                textResponseArray[4] = "File Permission: ";
+                textResponseArray[5] = strdup(temp);
+
+                textResponseArray[6] = "Date Created: ";
+                textResponseArray[7] = ctime(&sb->st_ctime);
+                return 1;
+            }
+        }
+        break;
     }
 
     return 0;
@@ -73,12 +103,7 @@ void handleClientRequest(char *cmd)
     {
         cmdCase = 0;
         indexCntForTextResponse = 0;
-        textResponseArray = (char **)malloc(1024 * sizeof(char *));
-        if (textResponseArray == NULL)
-        {
-            perror("Error in allocating memory dynamically");
-            exit(1);
-        }
+        memset(textResponseArray, 0, sizeof(textResponseArray));
 
         if (nftw(sourcePath, traverse, 20, FTW_PHYS) == -1)
         {
@@ -113,7 +138,38 @@ void handleClientRequest(char *cmd)
         }
 
         responseType = IS_TEXT_RESPONSE;
-        free(textResponseArray);
+    }
+    else if (strstr(cmd, "w24fn") != NULL)
+    {
+        cmdCase = 1;
+        fileFound = 0;
+        indexCntForTextResponse = 0;
+        memset(textResponseArray, 0, sizeof(textResponseArray));
+
+        sscanf(cmd, "%*s %s", filename);
+        if (nftw(sourcePath, traverse, 20, FTW_PHYS) == -1)
+        {
+            perror("nftw");
+            exit(1);
+        }
+
+        if (fileFound == 0)
+        {
+            strcpy(textResponse, "File not found");
+            responseType = IS_TEXT_RESPONSE;
+            return;
+        }
+
+        // Create a single string from the array
+        strcpy(textResponse, "");
+        for (int i = 0; i < 8; i++)
+        {
+            strcat(textResponse, textResponseArray[i]);
+            if (i != 7 && i % 2 != 0)
+                strcat(textResponse, "\n");
+        }
+
+        responseType = IS_TEXT_RESPONSE;
     }
 }
 
@@ -216,5 +272,5 @@ int main(int argc, char *argv[])
 
 int main2()
 {
-    handleClientRequest("dirlist -a");
+    handleClientRequest("w24fn z.txt");
 }
