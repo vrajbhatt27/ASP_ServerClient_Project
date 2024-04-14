@@ -12,17 +12,20 @@
 #include <sys/wait.h>
 #include <ftw.h>
 #include <time.h>
+#include <fcntl.h>
 
-#define PORTNUM 7656
+#define PORTNUM 7654
 #define BUFF_LMT 1024
 #define sourcePath "/home/ubuntu/Desktop"
 #define tarFilePath "/var/tmp/tarFilesStorageDirectory"
 #define IS_TEXT_RESPONSE 1
+#define IS_FILE_RESPONSE 2
 
 char filename[256];
 char textResponse[1024];
 char *textResponseArray[1024];
 int indexCntForTextResponse = 0;
+char fileResponse[1024];
 char tar_command[1024];
 char ext1[10], ext2[10], ext3[10];
 char date[15];
@@ -80,7 +83,7 @@ int sendData(int csd, char *data, int sendInChunks)
     return 0;
 }
 
-void execTarCommand(char *tar_command)
+char *execTarCommand(char *tar_command)
 {
     char command[2024];
     strcpy(command, "tar -cf ");
@@ -90,7 +93,13 @@ void execTarCommand(char *tar_command)
     strcat(command, tar_command);
     strcat(command, " 2>/dev/null");
 
-    system(command);
+    if (system(command) != 0)
+    {
+        perror("Error executing tar command");
+        return NULL;
+    }
+
+    return "/var/tmp/tarFilesStorageDirectory/temp.tar.gz";
 }
 
 // This function is used by the nftw() to traverse all the file in the path.
@@ -283,7 +292,13 @@ void handleClientRequest(char *cmd)
             responseType = IS_TEXT_RESPONSE;
             return;
         }
-        execTarCommand(tar_command);
+
+        char *res = execTarCommand(tar_command);
+        if (res != NULL)
+        {
+            strcpy(fileResponse, res);
+            responseType = IS_FILE_RESPONSE;
+        }
     }
     else if (strstr(cmd, "w24ft") != NULL)
     {
@@ -389,6 +404,62 @@ void textResponseHandler(int csd)
     }
 }
 
+void fileResponseHandler(int csd)
+{
+    int fd = open(fileResponse, O_RDONLY);
+    if (fd == -1)
+    {
+        fprintf(stderr, "File open operation failed !\n");
+        exit(1);
+    }
+
+    long int fileSize = lseek(fd, 0, SEEK_END);
+    lseek(fd, 0, SEEK_SET);
+
+    printf("File Size: %ld\n", fileSize);
+    // Sending Header First: resonseType/lengthOfResponse
+    char header[10];
+    sprintf(header, "*%d/%ld", responseType, fileSize);
+    if (sendData(csd, header, 0) < 0)
+    {
+        return;
+    }
+
+    // Getting Client Response (H_OK)
+    char clientRequest[BUFF_LMT];
+    if (receiveData(csd, clientRequest, sizeof(clientRequest)) < 0)
+    {
+        return;
+    }
+    printf("Client Header Response: %s\n", clientRequest);
+
+    // sending data to client if client request is OK
+    if (strcmp(clientRequest, "H_OK") == 0)
+    {
+        // printf("HERE--1\n");
+        int readBytes = 512;
+        char readBuffer[readBytes];
+        int totalBytesRead = 0;
+        int bytesRead = 0;
+        while (totalBytesRead < fileSize)
+        {
+            memset(readBuffer, 0, sizeof(readBuffer));
+            bytesRead = read(fd, readBuffer, sizeof(readBuffer));
+            if (send(csd, readBuffer, bytesRead, 0) < 0)
+            {
+                perror("Error sending data to client");
+                return;
+            }
+            // printf("HERE -- 3: Bytes Read: %d\n", bytesRead);
+            totalBytesRead += bytesRead;
+            // printf("HERE -- 4: Total Bytes Read: %d\n", totalBytesRead);
+        }
+        printf("File Sent Successfully\n");
+    }
+
+    close(fd);
+}
+
 void crequest(int csd)
 {
     char cmd[BUFF_LMT];
@@ -409,9 +480,15 @@ void crequest(int csd)
         printf("Client: %s\n", clientRequest);
 
         handleClientRequest(clientRequest);
+        // responseType = IS_FILE_RESPONSE;
         if (responseType == IS_TEXT_RESPONSE)
         {
             textResponseHandler(csd);
+        }
+        else
+        {
+            // strcpy(fileResponse, "/var/tmp/tarFilesStorageDirectory/temp.txt");
+            fileResponseHandler(csd);
         }
     }
 }

@@ -7,10 +7,13 @@
 #include <sys/types.h>
 #include <sys/signal.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
-#define PORTNUM 7656
+#define PORTNUM 7654
 #define BUFF_LMT 1024
 #define IS_TEXT_RESPONSE 1
+#define IS_FILE_RESPONSE 2
+#define TAR_FILE_PATH "/home/ubuntu/w24project/temp.tar.gz"
 
 int responseType;
 
@@ -63,8 +66,43 @@ int receiveData(int csd, char *serverResponse, int totalBytesToRead, int readInC
     }
 }
 
-void handleServerResponse(char *serverResponse)
+void processFileResponse(int csd, long int totalBytesToRead)
 {
+    // printf("HERE--2\n");
+    int fd = open(TAR_FILE_PATH, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (fd < 0)
+    {
+        perror("Error Creating file");
+        return;
+    }
+
+    int bytes_read = 0;
+    int total_bytes_read = 0;
+    int readBytes = 512;
+
+    char buffer[readBytes];
+    printf("Total Bytes To Read: %ld\n", totalBytesToRead);
+    while (total_bytes_read < totalBytesToRead)
+    {
+        memset(buffer, 0, sizeof(buffer));
+        bytes_read = recv(csd, buffer, readBytes, 0);
+        // printf("Here --3: Received %d bytes\n", bytes_read);
+        if (bytes_read < 0)
+        {
+            perror("Error reading server response");
+            return;
+        }
+        else if (bytes_read == 0)
+        {
+            printf("Server closed connection.\n");
+            return;
+        }
+        write(fd, buffer, bytes_read);
+        total_bytes_read += bytes_read;
+        // printf("Here --4: Total %d bytes\n", total_bytes_read);
+    }
+
+    close(fd);
 }
 
 void processClientResponse(int csd)
@@ -105,9 +143,9 @@ void processClientResponse(int csd)
 
         if (serverResponse[0] == '*')
         {
-            int textResponseRecvSize = 0;
+            long int responseRecvSize = 0;
             int rtype = 0;
-            sscanf(serverResponse, "*%d/%d", &rtype, &textResponseRecvSize);
+            sscanf(serverResponse, "*%d/%ld", &rtype, &responseRecvSize);
             responseType = rtype == 1 ? IS_TEXT_RESPONSE : 0;
             char *response = "H_OK";
 
@@ -117,11 +155,20 @@ void processClientResponse(int csd)
                 return;
             }
 
-            if (receiveData(csd, serverResponse, textResponseRecvSize, 1) < 0)
+            if (responseType == IS_TEXT_RESPONSE)
             {
-                return;
+                if (receiveData(csd, serverResponse, responseRecvSize, 1) < 0)
+                {
+                    return;
+                }
+                printf("%s", serverResponse);
             }
-            printf("%s", serverResponse);
+            else
+            {
+                // printf("HERE--1\n");
+                processFileResponse(csd, responseRecvSize);
+                printf("File received successfully.\n");
+            }
         }
     }
 }
