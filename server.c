@@ -19,15 +19,17 @@
 #define tarFilePath "/var/tmp/tarFilesStorageDirectory"
 #define IS_TEXT_RESPONSE 1
 
-int cmdCase;
 char filename[256];
-int size1, size2;
 char textResponse[1024];
 char *textResponseArray[1024];
 int indexCntForTextResponse = 0;
+char tar_command[1024];
+char ext1[10], ext2[10], ext3[10];
+char date[15];
+int cmdCase;
+int size1, size2;
 int responseType;
 int fileFound;
-char tar_command[1024];
 
 int receiveData(int csd, char *buffer, int bufferSize)
 {
@@ -120,6 +122,50 @@ static int traverse(const char *fpath, const struct stat *sb, int tflag, struct 
             }
         }
         break;
+    case 3:
+        if (tflag == FTW_F)
+        {
+            char *extension = strrchr(fpath + ftwbuf->base, '.');
+            if (extension != NULL)
+            {
+                extension++;
+                if (strcmp(extension, ext1) == 0 || strcmp(extension, ext2) == 0 || strcmp(extension, ext3) == 0)
+                {
+                    fileFound = 1;
+                    strcat(tar_command, " ");
+                    strcat(tar_command, fpath);
+                }
+            }
+        }
+        break;
+    case 4:
+        if (tflag == FTW_F)
+        {
+            struct tm *time = localtime(&sb->st_ctime);
+            char temp[15];
+            strftime(temp, 15, "%Y-%m-%d", time);
+            if (strcmp(temp, date) <= 0)
+            {
+                fileFound = 1;
+                strcat(tar_command, " ");
+                strcat(tar_command, fpath);
+            }
+        }
+        break;
+    case 5:
+        if (tflag == FTW_F)
+        {
+            struct tm *time = localtime(&sb->st_ctime);
+            char temp[15];
+            strftime(temp, 15, "%Y-%m-%d", time);
+            if (strcmp(temp, date) >= 0)
+            {
+                fileFound = 1;
+                strcat(tar_command, " ");
+                strcat(tar_command, fpath);
+            }
+        }
+        break;
     }
     return 0;
 }
@@ -202,6 +248,7 @@ void handleClientRequest(char *cmd)
     {
         cmdCase = 2;
         fileFound = 0;
+        memset(tar_command, 0, sizeof(tar_command));
         sscanf(cmd, "%*s %d %d", &size1, &size2);
 
         if (nftw(sourcePath, traverse, 20, FTW_PHYS) == -1)
@@ -222,6 +269,13 @@ void handleClientRequest(char *cmd)
     {
         cmdCase = 3;
         fileFound = 0;
+        memset(tar_command, 0, sizeof(tar_command));
+        memset(ext1, 0, sizeof(ext1));
+        memset(ext2, 0, sizeof(ext2));
+        memset(ext3, 0, sizeof(ext3));
+
+        sscanf(cmd, "%*s %s %s %s", ext1, ext2, ext3);
+
         if (nftw(sourcePath, traverse, 20, FTW_PHYS) == -1)
         {
             perror("nftw");
@@ -234,6 +288,55 @@ void handleClientRequest(char *cmd)
             responseType = IS_TEXT_RESPONSE;
             return;
         }
+
+        execTarCommand(tar_command);
+    }
+    else if (strstr(cmd, "w24fdb") != NULL)
+    {
+        cmdCase = 4;
+        fileFound = 0;
+        memset(tar_command, 0, sizeof(tar_command));
+        memset(date, 0, sizeof(date));
+
+        sscanf(cmd, "%*s %s", date);
+
+        if (nftw(sourcePath, traverse, 20, FTW_PHYS) == -1)
+        {
+            perror("nftw");
+            exit(1);
+        }
+
+        if (fileFound == 0)
+        {
+            strcpy(textResponse, "No files found");
+            responseType = IS_TEXT_RESPONSE;
+            return;
+        }
+
+        execTarCommand(tar_command);
+    }
+    else if (strstr(cmd, "w24fda") != NULL)
+    {
+        cmdCase = 5;
+        fileFound = 0;
+        memset(tar_command, 0, sizeof(tar_command));
+        memset(date, 0, sizeof(date));
+
+        sscanf(cmd, "%*s %s", date);
+
+        if (nftw(sourcePath, traverse, 20, FTW_PHYS) == -1)
+        {
+            perror("nftw");
+            exit(1);
+        }
+
+        if (fileFound == 0)
+        {
+            strcpy(textResponse, "No files found");
+            responseType = IS_TEXT_RESPONSE;
+            return;
+        }
+
         execTarCommand(tar_command);
     }
 }
@@ -337,5 +440,5 @@ int main2(int argc, char *argv[])
 
 int main()
 {
-    handleClientRequest("w24fz 1 10");
+    handleClientRequest("w24fdb 2024-04-14");
 }
