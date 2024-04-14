@@ -81,7 +81,7 @@ void processFileResponse(int csd, long int totalBytesToRead)
     int readBytes = 512;
 
     char buffer[readBytes];
-    printf("Total Bytes To Read: %ld\n", totalBytesToRead);
+    // printf("Total Bytes To Read: %ld\n", totalBytesToRead);
     while (total_bytes_read < totalBytesToRead)
     {
         memset(buffer, 0, sizeof(buffer));
@@ -134,6 +134,11 @@ void processClientResponse(int csd)
         {
             perror("Error sending client request");
             return;
+        }
+
+        if (strcmp(clientRequest, "quitc") == 0)
+        {
+            break;
         }
 
         if (receiveData(csd, serverResponse, sizeof(serverResponse), 0) < 0)

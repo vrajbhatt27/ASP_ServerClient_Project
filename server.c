@@ -479,6 +479,13 @@ void crequest(int csd)
         }
         printf("Client: %s\n", clientRequest);
 
+        if (strcmp(clientRequest, "quitc") == 0)
+        {
+            printf("Client Has Disconnected Successfully\n");
+            close(csd);
+            return;
+        }
+
         handleClientRequest(clientRequest);
         // responseType = IS_FILE_RESPONSE;
         if (responseType == IS_TEXT_RESPONSE)
