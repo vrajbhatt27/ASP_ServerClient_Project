@@ -15,16 +15,19 @@
 
 #define PORTNUM 7654
 #define BUFF_LMT 1024
-#define sourcePath "/home/bhatt6b/Desktop"
+#define sourcePath "/home/ubuntu/Desktop"
+#define tarFilePath "/var/tmp/tarFilesStorageDirectory"
 #define IS_TEXT_RESPONSE 1
 
 int cmdCase;
 char filename[256];
+int size1, size2;
 char textResponse[1024];
 char *textResponseArray[1024];
 int indexCntForTextResponse = 0;
 int responseType;
 int fileFound;
+char tar_command[1024];
 
 int receiveData(int csd, char *buffer, int bufferSize)
 {
@@ -53,6 +56,19 @@ int sendData(int csd, char *data)
     }
     memset(data, 0, strlen(data));
     return 0;
+}
+
+void execTarCommand(char *tar_command)
+{
+    char command[2024];
+    strcpy(command, "tar -cf ");
+    strcat(command, tarFilePath);
+    strcat(command, "/temp.tar.gz");
+    strcat(command, " ");
+    strcat(command, tar_command);
+    strcat(command, " 2>/dev/null");
+
+    system(command);
 }
 
 // This function is used by the nftw() to traverse all the file in the path.
@@ -92,8 +108,19 @@ static int traverse(const char *fpath, const struct stat *sb, int tflag, struct 
             }
         }
         break;
+    case 2:
+        if (tflag == FTW_F)
+        {
+            if (sb->st_size >= size1 && sb->st_size <= size2)
+            {
+                // printf("%s\n", fpath + ftwbuf->base);
+                fileFound = 1;
+                strcat(tar_command, " ");
+                strcat(tar_command, fpath);
+            }
+        }
+        break;
     }
-
     return 0;
 }
 
@@ -171,6 +198,44 @@ void handleClientRequest(char *cmd)
 
         responseType = IS_TEXT_RESPONSE;
     }
+    else if (strstr(cmd, "w24fz") != NULL)
+    {
+        cmdCase = 2;
+        fileFound = 0;
+        sscanf(cmd, "%*s %d %d", &size1, &size2);
+
+        if (nftw(sourcePath, traverse, 20, FTW_PHYS) == -1)
+        {
+            perror("nftw");
+            exit(1);
+        }
+
+        if (fileFound == 0)
+        {
+            strcpy(textResponse, "No files found");
+            responseType = IS_TEXT_RESPONSE;
+            return;
+        }
+        execTarCommand(tar_command);
+    }
+    else if (strstr(cmd, "w24ft") != NULL)
+    {
+        cmdCase = 3;
+        fileFound = 0;
+        if (nftw(sourcePath, traverse, 20, FTW_PHYS) == -1)
+        {
+            perror("nftw");
+            exit(1);
+        }
+
+        if (fileFound == 0)
+        {
+            strcpy(textResponse, "No files found");
+            responseType = IS_TEXT_RESPONSE;
+            return;
+        }
+        execTarCommand(tar_command);
+    }
 }
 
 void textResponseHandler(int csd)
@@ -217,7 +282,7 @@ void crequest(int csd)
     }
 }
 
-int main(int argc, char *argv[])
+int main2(int argc, char *argv[])
 {
     int sd, csd, portNumber, status;
     socklen_t len;
@@ -270,7 +335,7 @@ int main(int argc, char *argv[])
     }
 }
 
-int main2()
+int main()
 {
-    handleClientRequest("w24fn z.txt");
+    handleClientRequest("w24fz 1 10");
 }
