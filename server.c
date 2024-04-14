@@ -364,7 +364,6 @@ void handleClientRequest(char *cmd)
 void textResponseHandler(int csd)
 {
     // Sending Header First: resonseType/lengthOfResponse
-    strcpy(textResponse, "This is a temporary message that is long jarvis99");
     char header[10];
     sprintf(header, "*%d/%ld", responseType, strlen(textResponse));
     if (sendData(csd, header, 0) < 0)
@@ -372,6 +371,7 @@ void textResponseHandler(int csd)
         return;
     }
 
+    // Getting Client Response (H_OK)
     char clientRequest[BUFF_LMT];
     if (receiveData(csd, clientRequest, sizeof(clientRequest)) < 0)
     {
@@ -408,8 +408,7 @@ void crequest(int csd)
         }
         printf("Client: %s\n", clientRequest);
 
-        // handleClientRequest(clientRequest);
-        responseType = IS_TEXT_RESPONSE;
+        handleClientRequest(clientRequest);
         if (responseType == IS_TEXT_RESPONSE)
         {
             textResponseHandler(csd);
