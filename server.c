@@ -13,7 +13,7 @@
 #include <ftw.h>
 #include <time.h>
 
-#define PORTNUM 7654
+#define PORTNUM 7656
 #define BUFF_LMT 1024
 #define sourcePath "/home/ubuntu/Desktop"
 #define tarFilePath "/var/tmp/tarFilesStorageDirectory"
@@ -49,13 +49,33 @@ int receiveData(int csd, char *buffer, int bufferSize)
     return 0;
 }
 
-int sendData(int csd, char *data)
+int sendData(int csd, char *data, int sendInChunks)
 {
-    if (send(csd, data, strlen(data), 0) < 0)
+    if (sendInChunks)
     {
-        perror("Error sending data to client");
-        return -1;
+        int sendBytes = 10;
+        int totalBytes = strlen(data);
+        int bytesSent = 0;
+        while (totalBytes > 0)
+        {
+            bytesSent += send(csd, data + bytesSent, sendBytes, 0);
+            if (bytesSent < 0)
+            {
+                perror("Error sending data to client");
+                return -1;
+            }
+            totalBytes -= sendBytes;
+        }
     }
+    else
+    {
+        if (send(csd, data, strlen(data), 0) < 0)
+        {
+            perror("Error sending data to client");
+            return -1;
+        }
+    }
+
     memset(data, 0, strlen(data));
     return 0;
 }
@@ -344,17 +364,28 @@ void handleClientRequest(char *cmd)
 void textResponseHandler(int csd)
 {
     // Sending Header First: resonseType/lengthOfResponse
+    strcpy(textResponse, "This is a temporary message that is long jarvis99");
     char header[10];
     sprintf(header, "*%d/%ld", responseType, strlen(textResponse));
-    if (sendData(csd, header) < 0)
+    if (sendData(csd, header, 0) < 0)
     {
         return;
     }
 
-    // sending data to client
-    if (sendData(csd, textResponse) < 0)
+    char clientRequest[BUFF_LMT];
+    if (receiveData(csd, clientRequest, sizeof(clientRequest)) < 0)
     {
         return;
+    }
+    printf("Client Header Response: %s\n", clientRequest);
+
+    // sending data to client if client request is OK
+    if (strcmp(clientRequest, "H_OK") == 0)
+    {
+        if (sendData(csd, textResponse, 1) < 0)
+        {
+            return;
+        }
     }
 }
 
@@ -363,7 +394,7 @@ void crequest(int csd)
     char cmd[BUFF_LMT];
     strcpy(cmd, "Connected Successfully\nEnter Commands below:");
 
-    if (sendData(csd, cmd) < 0)
+    if (sendData(csd, cmd, 0) < 0)
     {
         return;
     }
@@ -377,7 +408,8 @@ void crequest(int csd)
         }
         printf("Client: %s\n", clientRequest);
 
-        handleClientRequest(clientRequest);
+        // handleClientRequest(clientRequest);
+        responseType = IS_TEXT_RESPONSE;
         if (responseType == IS_TEXT_RESPONSE)
         {
             textResponseHandler(csd);
@@ -385,7 +417,7 @@ void crequest(int csd)
     }
 }
 
-int main2(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
     int sd, csd, portNumber, status;
     socklen_t len;
@@ -438,7 +470,7 @@ int main2(int argc, char *argv[])
     }
 }
 
-int main()
+int main2()
 {
     handleClientRequest("w24fdb 2024-04-14");
 }

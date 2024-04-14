@@ -8,28 +8,59 @@
 #include <sys/signal.h>
 #include <arpa/inet.h>
 
-#define PORTNUM 7654
+#define PORTNUM 7656
 #define BUFF_LMT 1024
 #define IS_TEXT_RESPONSE 1
 
 int responseType;
 
-int receiveData(int csd, char *buffer, int bufferSize)
+int receiveData(int csd, char *serverResponse, int totalBytesToRead, int readInChunks)
 {
-    memset(buffer, 0, sizeof(buffer));
-    int bytes_read = recv(csd, buffer, bufferSize, 0);
-    if (bytes_read < 0)
+    if (readInChunks)
     {
-        perror("Error reading server response");
-        return -1;
+        int bytes_read = 0;
+        int total_bytes_read = 0;
+        int readBytes = 10;
+
+        memset(serverResponse, 0, sizeof(serverResponse));
+        char buffer[readBytes];
+        while (total_bytes_read <= totalBytesToRead)
+        {
+            memset(buffer, 0, sizeof(buffer));
+            bytes_read = recv(csd, buffer, readBytes, 0);
+            if (bytes_read < 0)
+            {
+                perror("Error reading server response");
+                return -1;
+            }
+            else if (bytes_read == 0)
+            {
+                printf("Server closed connection.\n");
+                return -1;
+            }
+            buffer[bytes_read] = '\0';
+            strcat(serverResponse, buffer);
+            total_bytes_read += bytes_read;
+        }
+        return 0;
     }
-    else if (bytes_read == 0)
+    else
     {
-        printf("Server closed connection.\n");
-        return -1;
+        memset(serverResponse, 0, sizeof(serverResponse));
+        int bytes_read = recv(csd, serverResponse, totalBytesToRead, 0);
+        if (bytes_read < 0)
+        {
+            perror("Error reading server response");
+            return -1;
+        }
+        else if (bytes_read == 0)
+        {
+            printf("Server closed connection.\n");
+            return -1;
+        }
+        serverResponse[bytes_read] = '\0';
+        return 0;
     }
-    buffer[bytes_read] = '\0';
-    return 0;
 }
 
 void handleServerResponse(char *serverResponse)
@@ -41,7 +72,7 @@ void processClientResponse(int csd)
     printf("Connected successfully to the server!\n");
 
     char serverResponse[BUFF_LMT];
-    if (receiveData(csd, serverResponse, sizeof(serverResponse)) < 0)
+    if (receiveData(csd, serverResponse, sizeof(serverResponse), 0) < 0)
     {
         return;
     }
@@ -67,7 +98,7 @@ void processClientResponse(int csd)
             return;
         }
 
-        if (receiveData(csd, serverResponse, sizeof(serverResponse)) < 0)
+        if (receiveData(csd, serverResponse, sizeof(serverResponse), 0) < 0)
         {
             return;
         }
@@ -78,8 +109,15 @@ void processClientResponse(int csd)
             int rtype = 0;
             sscanf(serverResponse, "*%d/%d", &rtype, &textResponseRecvSize);
             responseType = rtype == 1 ? IS_TEXT_RESPONSE : 0;
+            char *response = "H_OK";
 
-            if (receiveData(csd, serverResponse, sizeof(serverResponse)))
+            if (send(csd, response, strlen(response), 0) < 0)
+            {
+                perror("Error sending client request");
+                return;
+            }
+
+            if (receiveData(csd, serverResponse, textResponseRecvSize, 1) < 0)
             {
                 return;
             }
