@@ -8,11 +8,14 @@
 #include <sys/signal.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 #define PORTNUM 7654
 #define BUFF_LMT 1024
 #define IS_TEXT_RESPONSE 1
 #define IS_FILE_RESPONSE 2
+#define TAR_FILE_DIR "/home/ubuntu/w24project/"
 #define TAR_FILE_PATH "/home/ubuntu/w24project/temp.tar.gz"
 
 int connectToServer(const char *ipAddr, int port);
@@ -74,6 +77,11 @@ int receiveData(int csd, char *serverResponse, int totalBytesToRead, int readInC
 
 void processFileResponse(int csd, long int totalBytesToRead)
 {
+    if (access(TAR_FILE_DIR, F_OK) == -1)
+    {
+        mkdir(TAR_FILE_DIR, 0777);
+    }
+
     // printf("HERE--2\n");
     int fd = open(TAR_FILE_PATH, O_CREAT | O_WRONLY | O_TRUNC, 0644);
     if (fd < 0)

@@ -92,6 +92,11 @@ int sendData(int csd, char *data, int sendInChunks)
 
 char *execTarCommand(char *tar_command)
 {
+    if (access(tarFilePath, F_OK) == -1)
+    {
+        mkdir(tarFilePath, 0777);
+    }
+
     char command[2024];
     strcpy(command, "tar -cf ");
     strcat(command, tarFilePath);
