@@ -33,6 +33,7 @@ int cmdCase;
 int size1, size2;
 int responseType;
 int fileFound;
+int clientNumber = 0;
 
 int receiveData(int csd, char *buffer, int bufferSize)
 {
@@ -515,6 +516,19 @@ void crequest(int csd)
     }
 }
 
+void sendToMirror1(int csd)
+{
+    char header[30];
+    // mirrorNumber/portNumber/ipAddress
+    sprintf(header, "*%d/%d/%s", 1, 7655, "127.0.0.1");
+    if (sendData(csd, header, 0) < 0)
+    {
+        return;
+    }
+
+    printf("Client Forwarded to Mirror 1 Successfully.\n");
+}
+
 int main(int argc, char *argv[])
 {
     int sd, csd, portNumber, status;
@@ -557,14 +571,29 @@ int main(int argc, char *argv[])
         }
         printf("Client has connected Successfully\n");
 
-        // child proces will redirect client
-        if (!fork())
+        clientNumber += 1;
+
+        if (clientNumber == 1)
         {
-            crequest(csd);
-            close(csd);
-            exit(0);
+            if (!fork())
+            {
+                sendToMirror1(csd);
+                close(csd);
+                exit(0);
+            }
+            waitpid(0, &status, WNOHANG);
         }
-        waitpid(0, &status, WNOHANG);
+        else
+        {
+            // child proces will redirect client
+            if (!fork())
+            {
+                crequest(csd);
+                close(csd);
+                exit(0);
+            }
+            waitpid(0, &status, WNOHANG);
+        }
     }
 }
 

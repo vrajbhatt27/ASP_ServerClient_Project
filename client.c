@@ -15,6 +15,12 @@
 #define IS_FILE_RESPONSE 2
 #define TAR_FILE_PATH "/home/ubuntu/w24project/temp.tar.gz"
 
+int connectToServer(const char *ipAddr, int port);
+void processClientResponse(int csd);
+void processFileResponse(int csd, long int totalBytesToRead);
+int receiveData(int csd, char *serverResponse, int totalBytesToRead, int readInChunks);
+void requestToMirror(int mirrorNumber, char *ipAddr, int portNumber);
+
 int responseType;
 
 int receiveData(int csd, char *serverResponse, int totalBytesToRead, int readInChunks)
@@ -105,6 +111,20 @@ void processFileResponse(int csd, long int totalBytesToRead)
     close(fd);
 }
 
+void requestToMirror(int mirrorNumber, char *ipAddr, int portNumber)
+{
+    int csd = connectToServer(ipAddr, portNumber);
+    if (csd < 0)
+    {
+        printf("Failed to connect to server.\n");
+        return;
+    }
+
+    processClientResponse(csd);
+
+    close(csd);
+}
+
 void processClientResponse(int csd)
 {
     printf("Connected successfully to the server!\n");
@@ -113,6 +133,17 @@ void processClientResponse(int csd)
     if (receiveData(csd, serverResponse, sizeof(serverResponse), 0) < 0)
     {
         return;
+    }
+
+    // Handle Mirror
+    if (serverResponse[0] == '*')
+    {
+        close(csd);
+        int mirrorNumber = 0;
+        char ipAddr[16];
+        int portNumber = 0;
+        sscanf(serverResponse, "*%d/%d/%s", &mirrorNumber, &portNumber, ipAddr);
+        requestToMirror(mirrorNumber, ipAddr, portNumber);
     }
 
     printf("****************************************\n");
@@ -178,8 +209,9 @@ void processClientResponse(int csd)
     }
 }
 
-int connectToServer(const char *ipAddr)
+int connectToServer(const char *ipAddr, int port)
 {
+    int portNum = port == 0 ? PORTNUM : port;
     int csd = socket(AF_INET, SOCK_STREAM, 0);
     if (csd < 0)
     {
@@ -189,7 +221,7 @@ int connectToServer(const char *ipAddr)
 
     struct sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(PORTNUM);
+    serverAddress.sin_port = htons(portNum);
 
     if (inet_pton(AF_INET, ipAddr, &serverAddress.sin_addr) <= 0)
     {
@@ -220,7 +252,7 @@ int main(int argc, char *argv[])
 
     strcpy(ipAddr, argv[1]);
 
-    int csd = connectToServer(ipAddr);
+    int csd = connectToServer(ipAddr, 0);
     if (csd < 0)
     {
         printf("Failed to connect to server.\n");

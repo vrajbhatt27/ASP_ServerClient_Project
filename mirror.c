@@ -33,6 +33,7 @@ int cmdCase;
 int size1, size2;
 int responseType;
 int fileFound;
+int clientNumber = 0;
 
 int receiveData(int csd, char *buffer, int bufferSize)
 {
@@ -324,7 +325,12 @@ void handleClientRequest(char *cmd)
             return;
         }
 
-        execTarCommand(tar_command);
+        char *res = execTarCommand(tar_command);
+        if (res != NULL)
+        {
+            strcpy(fileResponse, res);
+            responseType = IS_FILE_RESPONSE;
+        }
     }
     else if (strstr(cmd, "w24fdb") != NULL)
     {
@@ -348,7 +354,12 @@ void handleClientRequest(char *cmd)
             return;
         }
 
-        execTarCommand(tar_command);
+        char *res = execTarCommand(tar_command);
+        if (res != NULL)
+        {
+            strcpy(fileResponse, res);
+            responseType = IS_FILE_RESPONSE;
+        }
     }
     else if (strstr(cmd, "w24fda") != NULL)
     {
@@ -372,7 +383,12 @@ void handleClientRequest(char *cmd)
             return;
         }
 
-        execTarCommand(tar_command);
+        char *res = execTarCommand(tar_command);
+        if (res != NULL)
+        {
+            strcpy(fileResponse, res);
+            responseType = IS_FILE_RESPONSE;
+        }
     }
 }
 
@@ -487,12 +503,14 @@ void crequest(int csd)
         }
 
         handleClientRequest(clientRequest);
+        // responseType = IS_FILE_RESPONSE;
         if (responseType == IS_TEXT_RESPONSE)
         {
             textResponseHandler(csd);
         }
         else
         {
+            // strcpy(fileResponse, "/var/tmp/tarFilesStorageDirectory/temp.txt");
             fileResponseHandler(csd);
         }
     }
@@ -549,9 +567,4 @@ int main(int argc, char *argv[])
         }
         waitpid(0, &status, WNOHANG);
     }
-}
-
-int main2()
-{
-    handleClientRequest("w24fdb 2024-04-14");
 }
