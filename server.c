@@ -247,8 +247,8 @@ void handleClientRequest(char *cmd)
         for (int i = 0; i < indexCntForTextResponse; i++)
         {
             strcat(textResponse, textResponseArray[i]);
-            if (i != indexCntForTextResponse - 1)
-                strcat(textResponse, "\n");
+            // if (i != indexCntForTextResponse - 1)
+            strcat(textResponse, "\n");
         }
 
         responseType = IS_TEXT_RESPONSE;
