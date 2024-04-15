@@ -14,7 +14,7 @@
 #include <time.h>
 #include <fcntl.h>
 
-#define PORTNUM 7654
+#define PORTNUM 7655
 #define BUFF_LMT 1024
 #define sourcePath "/home/ubuntu/Desktop"
 #define tarFilePath "/var/tmp/tarFilesStorageDirectory"
@@ -324,12 +324,7 @@ void handleClientRequest(char *cmd)
             return;
         }
 
-        char *res = execTarCommand(tar_command);
-        if (res != NULL)
-        {
-            strcpy(fileResponse, res);
-            responseType = IS_FILE_RESPONSE;
-        }
+        execTarCommand(tar_command);
     }
     else if (strstr(cmd, "w24fdb") != NULL)
     {
@@ -353,12 +348,7 @@ void handleClientRequest(char *cmd)
             return;
         }
 
-        char *res = execTarCommand(tar_command);
-        if (res != NULL)
-        {
-            strcpy(fileResponse, res);
-            responseType = IS_FILE_RESPONSE;
-        }
+        execTarCommand(tar_command);
     }
     else if (strstr(cmd, "w24fda") != NULL)
     {
@@ -382,12 +372,7 @@ void handleClientRequest(char *cmd)
             return;
         }
 
-        char *res = execTarCommand(tar_command);
-        if (res != NULL)
-        {
-            strcpy(fileResponse, res);
-            responseType = IS_FILE_RESPONSE;
-        }
+        execTarCommand(tar_command);
     }
 }
 
@@ -502,14 +487,12 @@ void crequest(int csd)
         }
 
         handleClientRequest(clientRequest);
-        // responseType = IS_FILE_RESPONSE;
         if (responseType == IS_TEXT_RESPONSE)
         {
             textResponseHandler(csd);
         }
         else
         {
-            // strcpy(fileResponse, "/var/tmp/tarFilesStorageDirectory/temp.txt");
             fileResponseHandler(csd);
         }
     }
