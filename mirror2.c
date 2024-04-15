@@ -14,18 +14,12 @@
 #include <time.h>
 #include <fcntl.h>
 
-#define PORTNUM 7654
+#define PORTNUM 7656
 #define BUFF_LMT 1024
 #define sourcePath "/home/ubuntu/Desktop"
 #define tarFilePath "/var/tmp/tarFilesStorageDirectory"
 #define IS_TEXT_RESPONSE 1
 #define IS_FILE_RESPONSE 2
-#define CON_SERVER 0
-#define CON_MIRROR_1 1
-#define CON_MIRROR_2 2
-#define MIRROR_1_PORT 7655
-#define MIRROR_2_PORT 7656
-#define MIRROR_IP_ADDRESS "127.0.0.1"
 
 char filename[256];
 char textResponse[1024];
@@ -522,42 +516,6 @@ void crequest(int csd)
     }
 }
 
-void sendToMirror(int csd, int servName)
-{
-    int port = (servName == CON_MIRROR_1) ? MIRROR_1_PORT : MIRROR_2_PORT;
-    char header[30];
-    // mirrorNumber/portNumber/ipAddress
-    sprintf(header, "*%d/%d/%s", servName, port, MIRROR_IP_ADDRESS);
-    if (sendData(csd, header, 0) < 0)
-    {
-        return;
-    }
-
-    printf("Client Forwarded to Mirror %d Successfully.\n", servName);
-}
-
-int loadBalancing(int clientNum)
-{
-    static int i = -1;
-    if (clientNum <= 3)
-    {
-        return CON_SERVER;
-    }
-    else if (clientNum >= 4 && clientNum <= 6)
-    {
-        return CON_MIRROR_1;
-    }
-    else if (clientNum >= 7 && clientNum <= 9)
-    {
-        return CON_MIRROR_2;
-    }
-    else
-    {
-        i++;
-        return i % 3;
-    }
-}
-
 int main(int argc, char *argv[])
 {
     int sd, csd, portNumber, status;
@@ -598,47 +556,15 @@ int main(int argc, char *argv[])
             perror("Error accepting connection");
             continue; // continue waiting for next connection
         }
+        printf("Client has connected Successfully\n");
 
-        clientNumber += 1;
-        printf("Client %d has connected Successfully\n", clientNumber);
-
-        int serverNameToConnect = loadBalancing(clientNumber);
-
-        if (serverNameToConnect == CON_MIRROR_1)
+        // child proces will redirect client
+        if (!fork())
         {
-            if (!fork())
-            {
-                sendToMirror(csd, CON_MIRROR_1);
-                close(csd);
-                exit(0);
-            }
-            waitpid(0, &status, WNOHANG);
+            crequest(csd);
+            close(csd);
+            exit(0);
         }
-        else if (serverNameToConnect == CON_MIRROR_2)
-        {
-            if (!fork())
-            {
-                sendToMirror(csd, CON_MIRROR_2);
-                close(csd);
-                exit(0);
-            }
-            waitpid(0, &status, WNOHANG);
-        }
-        else
-        {
-            // child proces will redirect client
-            if (!fork())
-            {
-                crequest(csd);
-                close(csd);
-                exit(0);
-            }
-            waitpid(0, &status, WNOHANG);
-        }
+        waitpid(0, &status, WNOHANG);
     }
-}
-
-int main2()
-{
-    handleClientRequest("w24fdb 2024-04-14");
 }
