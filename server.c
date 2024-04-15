@@ -16,7 +16,7 @@
 
 #define PORTNUM 7654
 #define BUFF_LMT 1024
-#define sourcePath "/home/ubuntu/Desktop"
+#define sourcePath "/home/ubuntu"
 #define tarFilePath "/var/tmp/tarFilesStorageDirectory"
 #define IS_TEXT_RESPONSE 1
 #define IS_FILE_RESPONSE 2
@@ -122,8 +122,11 @@ static int traverse(const char *fpath, const struct stat *sb, int tflag, struct 
     case 0:
         if (tflag == FTW_D)
         {
-            textResponseArray[indexCntForTextResponse] = strdup(fpath + ftwbuf->base);
-            indexCntForTextResponse++;
+            if (tflag == FTW_D && ftwbuf->level == 1)
+            {
+                textResponseArray[indexCntForTextResponse] = strdup(fpath + ftwbuf->base);
+                indexCntForTextResponse++;
+            }
         }
         break;
     case 1:
@@ -247,7 +250,6 @@ void handleClientRequest(char *cmd)
         for (int i = 0; i < indexCntForTextResponse; i++)
         {
             strcat(textResponse, textResponseArray[i]);
-            // if (i != indexCntForTextResponse - 1)
             strcat(textResponse, "\n");
         }
 
