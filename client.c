@@ -10,6 +10,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <stdbool.h>
+#include <ctype.h>
 
 #define PORTNUM 7654
 #define BUFF_LMT 1024
@@ -25,6 +27,243 @@ int receiveData(int csd, char *serverResponse, int totalBytesToRead, int readInC
 void requestToMirror(int mirrorNumber, char *ipAddr, int portNumber);
 
 int responseType;
+const char *knownExtensions[] = {
+    "txt", "pdf", "doc", "docx", "xls", "xlsx",
+    "jpg", "jpeg", "png", "gif", "bmp",
+    "cpp", "c", "h", "java", "py",
+    "mp3", "wav", "mp4", "avi", "mkv",
+    "zip", "rar", "7z", "tar", "gz", "xslt", "tar.gz", "tar"};
+const int knownExtensionsCount = sizeof(knownExtensions) / sizeof(knownExtensions[0]);
+
+// Function to validate if the file extension is known and properly formatted
+bool isValidExtension(const char *ext, bool requireDot)
+{
+    if (ext == NULL || *(ext + (requireDot ? 1 : 0)) == '\0')
+    {
+        return false;
+    }
+
+    if (requireDot && *ext != '.')
+    {
+        return false; // Return false if a dot is required but not present
+    }
+
+    if (*ext == '.')
+    {
+        ext++; // Skip the dot if present, regardless of requirement
+    }
+
+    // Check against known extensions
+    for (int i = 0; i < knownExtensionsCount; i++)
+    {
+        if (strcasecmp(ext, knownExtensions[i]) == 0)
+        {
+            return true; // Extension is recognized
+        }
+    }
+    return false; // No valid extension found
+}
+
+// Function to validate if a filename is properly formatted for Linux and has a valid extension
+bool isValidFilename(const char *filename)
+{
+    const char *ext; // Pointer to the file extension part
+
+    if (filename == NULL)
+    {
+        return false;
+    }
+    if (*filename == '-')
+    { // Check if the filename starts with a dash
+        return false;
+    }
+
+    ext = strrchr(filename, '.'); // Find the last dot in filename to assume it's the extension start
+    if (ext == NULL || !isValidExtension(ext, true))
+    {
+        return false; // No extension or invalid extension
+    }
+
+    // Validate the filename part before the extension
+    while (*filename && filename != ext)
+    {
+        if (*filename == '/' || *filename == '\0' || (unsigned char)*filename < ' ' ||
+            *filename == ':' || *filename == '*' || *filename == '?' || *filename == '"' ||
+            *filename == '<' || *filename == '>' || *filename == '|')
+        {
+            return false;
+        }
+        filename++;
+    }
+
+    return true;
+}
+
+// Function to check if the provided date is in YYYY-MM-DD format
+bool isValidDate(const char *date)
+{
+    int year, month, day;
+    if (date == NULL)
+    {
+        return false;
+    }
+    if (strlen(date) != 10)
+    {
+        return false;
+    }
+    if (date[4] != '-' || date[7] != '-')
+    {
+        return false;
+    }
+    // Parsing year, month, day
+    char yearStr[5], monthStr[3], dayStr[3];
+    strncpy(yearStr, date, 4);
+    yearStr[4] = '\0';
+    strncpy(monthStr, date + 5, 2);
+    monthStr[2] = '\0';
+    strncpy(dayStr, date + 8, 2);
+    dayStr[2] = '\0';
+
+    year = atoi(yearStr);
+    month = atoi(monthStr);
+    day = atoi(dayStr);
+
+    // Check year range
+    if (year < 1900 || year > 3000)
+        return false;
+
+    // Check month range
+    if (month < 1 || month > 12)
+        return false;
+
+    // Check day range
+    if (day < 1 || day > 31)
+        return false;
+    if ((month == 4 || month == 6 || month == 9 || month == 11) && day > 30)
+        return false;
+    if (month == 2)
+    {
+        // Check for leap year
+        bool isLeap = (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
+        if (day > (isLeap ? 29 : 28))
+            return false;
+    }
+    return true;
+}
+
+bool checkCommandSyntax(char *command)
+{
+    char *cmd, *arg1, *arg2, *endptr;
+    char *temp = strdup(command); // Create a modifiable copy of the command
+    bool isValid = true;          // Assume the command is valid unless proven otherwise
+    cmd = strtok(temp, " ");      // Extract the command part
+    char dateInput[11];           // Buffer for user input
+
+    if (cmd == NULL)
+    {
+        printf("No command entered. Please enter one to proceed\n");
+        isValid = false;
+    }
+
+    if (strcmp(cmd, "dirlist") == 0)
+    {
+        arg1 = strtok(NULL, " ");
+        if (arg1 == NULL || (strcmp(arg1, "-a") != 0 && strcmp(arg1, "-t") != 0))
+        {
+            printf("Invalid argument for dirlist. Use 'dirlist -a' or 'dirlist -t'\n");
+            isValid = false;
+        }
+    }
+    else if (strcmp(cmd, "w24fn") == 0)
+    {
+        arg1 = strtok(NULL, " ");
+        if (arg1 == NULL)
+        {
+            printf("Filename not specified. Use 'w24fn filename'\n");
+            isValid = false;
+        }
+        else if (!isValidFilename(arg1))
+        {
+            printf("Invalid filename '%s'. Filenames should not start with '-', contain '/', or any control characters and should have proper extension with it.\n", arg1);
+            isValid = false;
+        }
+    }
+    else if (strcmp(cmd, "w24fz") == 0)
+    {
+        arg1 = strtok(NULL, " ");
+        arg2 = strtok(NULL, " ");
+        long size1 = strtol(arg1, &endptr, 10);
+        long size2 = (arg2 != NULL) ? strtol(arg2, &endptr, 10) : -1;
+        if (arg1 == NULL || arg2 == NULL)
+        {
+            printf("Size range not fully specified. Use 'w24fz size1 size2'\n");
+            isValid = false;
+        }
+        else if (*endptr != '\0' || atoi(arg1) < 0 || atoi(arg2) < 0 || atoi(arg1) > atoi(arg2))
+        {
+            printf("Invalid size range. Ensure 0 <= size1 <= size2 and that size values are valid integers.\n");
+            isValid = false;
+        }
+    }
+    else if (strcmp(cmd, "w24ft") == 0)
+    {
+        arg1 = strtok(NULL, " ");
+        if (arg1 == NULL)
+        {
+            printf("At least one file extension must be specified. Use 'w24ft ext1 [ext2 ext3]'\n");
+            isValid = false;
+        }
+        else
+        {
+            int count = 0;
+
+            while (arg1 != NULL)
+            {
+                if (count >= 3)
+                {
+                    printf("Too many file extensions. Specify up to 3 file types\n");
+                    isValid = false;
+                    break; // Exit as soon as more than 3 extensions are processed
+                }
+
+                if (!isValidExtension(arg1, false))
+                {
+                    printf("Extension '%s' is not recognized. Please use a valid extension.\n", arg1);
+                    isValid = false;
+                    break; // Exit on the first invalid extension
+                }
+                count++;
+                arg1 = strtok(NULL, " "); // Get the next extension
+            }
+        }
+    }
+    else if (strcmp(cmd, "w24fdb") == 0 || strcmp(cmd, "w24fda") == 0)
+    {
+        arg1 = strtok(NULL, " ");
+        if (arg1 == NULL)
+        {
+            printf("Date not specified. Use '%s YYYY-MM-DD'\n", cmd);
+            isValid = false;
+        }
+        else if (!isValidDate(arg1))
+        {
+            printf("Invalid date format '%s'. Please use YYYY-MM-DD format.\n", arg1);
+            isValid = false;
+        }
+    }
+    else if (strstr(command, "quitc"))
+    {
+        isValid = true;
+    }
+    else
+    {
+        printf("Invalid command\n");
+        isValid = false;
+    }
+
+    free(temp); // Clean up the duplicated string
+    return isValid;
+}
 
 int receiveData(int csd, char *serverResponse, int totalBytesToRead, int readInChunks)
 {
@@ -168,6 +407,15 @@ void processClientResponse(int csd)
             return;
         }
         clientRequest[strcspn(clientRequest, "\n")] = '\0';
+
+        if (!checkCommandSyntax(clientRequest))
+        {
+            if (strcmp(clientRequest, "quitc") == 0)
+            {
+                break;
+            }
+            continue;
+        }
 
         if (send(csd, clientRequest, strlen(clientRequest), 0) < 0)
         {
