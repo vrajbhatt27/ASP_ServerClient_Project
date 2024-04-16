@@ -16,7 +16,7 @@
 
 #define PORTNUM 7655
 #define BUFF_LMT 1024
-#define sourcePath "/home/ubuntu/Desktop"
+#define sourcePath "/home/ubuntu"
 #define tarFilePath "/var/tmp/tarFilesStorageDirectory"
 #define IS_TEXT_RESPONSE 1
 #define IS_FILE_RESPONSE 2
