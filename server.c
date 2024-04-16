@@ -16,7 +16,7 @@
 
 #define PORTNUM 7654
 #define BUFF_LMT 1024
-#define sourcePath "/home/ubuntu"
+#define sourcePath "/home/ubuntu/Desktop"
 #define tarFilePath "/var/tmp/tarFilesStorageDirectory"
 #define IS_TEXT_RESPONSE 1
 #define IS_FILE_RESPONSE 2
@@ -27,11 +27,21 @@
 #define MIRROR_2_PORT 7656
 #define MIRROR_IP_ADDRESS "127.0.0.1"
 
+typedef struct
+{
+    char name[1024];
+    time_t ctime;
+} Directory;
+
+Directory *directories = NULL;
+int count = 0;
+int size = 0;
+
 char filename[256];
 char textResponse[1024];
 char *textResponseArray[1024];
 int indexCntForTextResponse = 0;
-char fileResponse[1024];
+char fileResponse[100];
 char tar_command[1024];
 char ext1[10], ext2[10], ext3[10];
 char date[15];
@@ -114,11 +124,54 @@ char *execTarCommand(char *tar_command)
     return "/var/tmp/tarFilesStorageDirectory/temp.tar.gz";
 }
 
-// This function is used by the nftw() to traverse all the file in the path.
+// Compare function for qsort
+int compare_directories(const void *a, const void *b)
+{
+    const Directory *dir1 = (const Directory *)a;
+    const Directory *dir2 = (const Directory *)b;
+    return (dir1->ctime - dir2->ctime);
+}
+
+void add_directory(const char *name, const struct stat *sb)
+{
+    if (count >= size)
+    {
+        int newSize = size ? size * 2 : 10; // Initially 10, double when full
+        Directory *temp = realloc(directories, newSize * sizeof(Directory));
+        if (temp == NULL)
+        {
+            fprintf(stderr, "Memory allocation failed\n");
+            return;
+        }
+        directories = temp;
+        size = newSize;
+    }
+
+    if (strlen(name) >= sizeof(directories[count].name))
+    {
+        fprintf(stderr, "Directory name too long to copy: %s\n", name);
+        return; // Skip this directory or handle error as appropriate
+    }
+
+    strcpy(directories[count].name, name);
+    directories[count].ctime = sb->st_ctime;
+    count++;
+} // This function is used by the nftw() to traverse all the file in the path.
+
 static int traverse(const char *fpath, const struct stat *sb, int tflag, struct FTW *ftwbuf)
 {
     switch (cmdCase)
     {
+    case -1:
+        if (tflag == FTW_D)
+        {
+            if (tflag == FTW_D && ftwbuf->level == 1)
+            {
+                char *dName = strdup(fpath + ftwbuf->base);
+                add_directory(dName, sb);
+            }
+        }
+        break;
     case 0:
         if (tflag == FTW_D)
         {
@@ -175,6 +228,7 @@ static int traverse(const char *fpath, const struct stat *sb, int tflag, struct 
                 extension++;
                 if (strcmp(extension, ext1) == 0 || strcmp(extension, ext2) == 0 || strcmp(extension, ext3) == 0)
                 {
+                    printf("%s\n", fpath);
                     fileFound = 1;
                     strcat(tar_command, " ");
                     strcat(tar_command, fpath);
@@ -219,6 +273,15 @@ void handleClientRequest(char *cmd)
     if (strstr(cmd, "dirlist") != NULL)
     {
         cmdCase = 0;
+        if (strstr(cmd, "-a") != NULL)
+        {
+            cmdCase = 0;
+        }
+        else if (strstr(cmd, "-t") != NULL)
+        {
+            cmdCase = -1;
+        }
+
         indexCntForTextResponse = 0;
         memset(textResponseArray, 0, sizeof(textResponseArray));
 
@@ -243,14 +306,29 @@ void handleClientRequest(char *cmd)
                     }
                 }
             }
+
+            // Create a single string from the array
+            strcpy(textResponse, "");
+            for (int i = 0; i < indexCntForTextResponse; i++)
+            {
+                strcat(textResponse, textResponseArray[i]);
+                strcat(textResponse, "\n");
+            }
         }
 
-        // Create a single string from the array
-        strcpy(textResponse, "");
-        for (int i = 0; i < indexCntForTextResponse; i++)
+        if (strstr(cmd, "-t") != NULL)
         {
-            strcat(textResponse, textResponseArray[i]);
-            strcat(textResponse, "\n");
+            // Sort the directories by creation time
+            qsort(directories, count, sizeof(Directory), compare_directories);
+            // Output sorted directories
+            strcpy(textResponse, "");
+            for (int i = 0; i < count; i++)
+            {
+                strcat(textResponse, directories[i].name);
+                strcat(textResponse, "\n");
+            }
+
+            count = 0;
         }
 
         responseType = IS_TEXT_RESPONSE;
@@ -647,5 +725,5 @@ int main(int argc, char *argv[])
 
 int main2()
 {
-    handleClientRequest("w24fdb 2024-04-14");
+    handleClientRequest("dirlist -t");
 }
