@@ -228,7 +228,6 @@ static int traverse(const char *fpath, const struct stat *sb, int tflag, struct 
                 extension++;
                 if (strcmp(extension, ext1) == 0 || strcmp(extension, ext2) == 0 || strcmp(extension, ext3) == 0)
                 {
-                    printf("%s\n", fpath);
                     fileFound = 1;
                     strcat(tar_command, " ");
                     strcat(tar_command, fpath);
